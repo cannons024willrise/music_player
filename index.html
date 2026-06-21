@@ -192,59 +192,6 @@
       object-fit: contain;
     }
 
-    .overlay-hint {
-      position: absolute;
-      inset: auto 14px 14px 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: end;
-      gap: 12px;
-      pointer-events: none;
-    }
-
-    .now-playing {
-      max-width: min(74%, 720px);
-      background: rgba(0,0,0,0.34);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      padding: 10px 12px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.22);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-
-    .now-playing .label {
-      font-size: 10px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      margin-bottom: 5px;
-    }
-
-    .now-playing .file {
-      font-size: 15px;
-      font-weight: 700;
-      word-break: break-word;
-    }
-
-    .now-playing .meta {
-      margin-top: 5px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .hint-box {
-      pointer-events: none;
-      font-size: 11px;
-      color: rgba(241,241,241,0.86);
-      background: rgba(0,0,0,0.34);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px;
-      padding: 10px 12px;
-      max-width: 290px;
-      line-height: 1.45;
-    }
-
     .controls {
       padding: 10px 14px 12px;
       border-top: 1px solid var(--border);
@@ -557,11 +504,6 @@
       .modal-grid { grid-template-columns: 1fr; }
       .seek-wrap { grid-template-columns: 48px 1fr 48px; }
       .volume { width: 92px; }
-      .overlay-hint { flex-direction: column; align-items: stretch; }
-      .now-playing { max-width: 100%; }
-      .hint-box { max-width: 100%; }
-      .toolbar { display: none; }
-    }
 
   </style>
 </head>
@@ -591,17 +533,13 @@
       <div class="main-stage">
         <div class="video-wrap" id="videoWrap">
           <video id="video" playsinline preload="metadata"></video>
-          <div class="overlay-hint">
-            <div class="now-playing">
-              <div class="label">Now playing</div>
-              <div class="file" id="currentTitle">Nothing loaded</div>
-              <div class="meta" id="currentMeta">Add a folder of videos to build a playlist.</div>
-            </div>
-            <div class="hint-box">
-              Space play/pause · ←/→ seek · ↑/↓ volume · N/P next/prev · L loop mode · S shuffle · 1/2 speed
-            </div>
-          </div>
         </div>
+
+        <div class="info-bar">
+          <div><span class="mini">Now playing</span> <strong id="currentTitleInline">Nothing loaded</strong></div>
+          <div class="mini" id="currentMetaInline">Add a folder of videos to build a playlist.</div>
+        </div>
+
         <div class="controls">
           <div class="seek-wrap">
             <div class="time" id="currentTime">0:00</div>
@@ -671,6 +609,8 @@
     const statusText = document.getElementById('statusText');
     const currentTitle = document.getElementById('currentTitle');
     const currentMeta = document.getElementById('currentMeta');
+    const currentTitleInline = document.getElementById('currentTitleInline');
+    const currentMetaInline = document.getElementById('currentMetaInline');
     const playlistCount = document.getElementById('playlistCount');
     const searchInput = document.getElementById('searchInput');
     const seekBar = document.getElementById('seekBar');
