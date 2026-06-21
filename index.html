@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local Video Playlist Player</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --bg2: #11182b;
+      --panel: rgba(17, 24, 43, 0.82);
+      --panel-strong: #151d33;
+      --card: #18213a;
+      --card-hover: #1f2a46;
+      --text: #edf2ff;
+      --muted: #93a4c3;
+      --muted2: #6e7f9f;
+      --accent: #7c8cff;
+      --accent2: #8a5cff;
+      --good: #39d98a;
+      --warn: #ffcb6b;
+      --danger: #ff6b8b;
+      --border: rgba(147, 164, 195, 0.14);
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      --radius: 22px;
+      --radius-sm: 14px;
+      --blur: blur(18px);
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(124, 140, 255, 0.18), transparent 28%),
+        radial-gradient(circle at 80% 10%, rgba(138, 92, 255, 0.18), transparent 24%),
+        radial-gradient(circle at 50% 100%, rgba(57, 217, 138, 0.08), transparent 30%),
+        linear-gradient(180deg, var(--bg), #070b14 90%);
+      overflow: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 1.8fr 1fr;
+      gap: 18px;
+      height: 100%;
+      padding: 18px;
+    }
+
+    .player-shell, .sidebar {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .player-shell {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 0;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      box-shadow: 0 10px 30px rgba(124, 140, 255, 0.35);
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .logo svg { width: 24px; height: 24px; fill: white; }
+
+    .title-wrap { min-width: 0; }
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .subtitle {
+      margin-top: 3px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    button, select, input[type="text"], input[type="range"] {
+      font: inherit;
+    }
+
+    .btn, .chip, .icon-btn, select, .file-btn {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 10px 12px;
+      transition: 0.18s ease;
+      outline: none;
+    }
+
+    .btn:hover, .chip:hover, .icon-btn:hover, select:hover, .file-btn:hover {
+      background: rgba(255,255,255,0.08);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, rgba(124,140,255,0.9), rgba(138,92,255,0.9));
+      border-color: transparent;
+      box-shadow: 0 10px 24px rgba(124, 140, 255, 0.25);
+    }
+
+    .btn.primary:hover { filter: brightness(1.05); }
+    .btn.danger:hover { background: rgba(255,107,139,0.15); }
+    .btn.good:hover { background: rgba(57,217,138,0.12); }
+
+    .chip {
+      padding: 9px 11px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .chip.on {
+      background: rgba(124,140,255,0.18);
+      border-color: rgba(124,140,255,0.45);
+      color: #dfe5ff;
+    }
+
+    .main-stage {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 0;
+    }
+
+    .video-wrap {
+      position: relative;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(124,140,255,0.08), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.08));
+      min-height: 0;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      max-height: calc(100vh - 220px);
+      background: #000;
+      object-fit: contain;
+    }
+
+    .overlay-hint {
+      position: absolute;
+      inset: auto 18px 18px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .now-playing {
+      max-width: 72%;
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      padding: 12px 14px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.28);
+    }
+
+    .now-playing .label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 6px;
+    }
+
+    .now-playing .file {
+      font-size: 16px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .now-playing .meta {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .hint-box {
+      pointer-events: none;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      max-width: 280px;
+    }
+
+    .controls {
+      padding: 14px 16px 16px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.06));
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .row.space {
+      justify-content: space-between;
+    }
+
+    .seek-wrap {
+      display: grid;
+      grid-template-columns: 60px 1fr 60px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .time {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .range {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .control-cluster {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .icon-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+    .mini {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .volume {
+      width: 120px;
+    }
+
+    .sidebar {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      min-height: 0;
+    }
+
+    .side-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      gap: 12px;
+    }
+
+    .side-head-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .count {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 11px 12px;
+      outline: none;
+    }
+    input[type="text"]::placeholder { color: #7e8cae; }
+
+    .playlist-actions {
+      padding: 0 16px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .playlist {
+      overflow: auto;
+      padding: 10px 10px 12px;
+      min-height: 0;
+    }
+
+    .track {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: 0.16s ease;
+      border: 1px solid transparent;
+    }
+
+    .track:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(147,164,195,0.12);
+    }
+
+    .track.active {
+      background: linear-gradient(135deg, rgba(124,140,255,0.15), rgba(138,92,255,0.12));
+      border-color: rgba(124,140,255,0.34);
+    }
+
+    .track.dragging { opacity: 0.55; }
+
+    .index-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+
+    .track.active .index-badge {
+      background: rgba(124,140,255,0.22);
+      color: #f2f4ff;
+    }
+
+    .track-info {
+      min-width: 0;
+    }
+
+    .track-name {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--muted2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-tools {
+      display: flex;
+      gap: 6px;
+    }
+
+    .track-tools button {
+      border-radius: 12px;
+      padding: 7px 9px;
+      font-size: 12px;
+    }
+
+    .side-foot {
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .dropzone {
+      border: 1px dashed rgba(147, 164, 195, 0.22);
+      border-radius: 16px;
+      padding: 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .dropzone.dragover {
+      border-color: rgba(124,140,255,0.6);
+      background: rgba(124,140,255,0.08);
+      color: #dfe5ff;
+    }
+
+    .small-note {
+      font-size: 11px;
+      color: var(--muted2);
+      line-height: 1.4;
+    }
+
+    .hidden { display: none !important; }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 15, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 20;
+    }
+
+    .modal.open { display: flex; }
+
+    .modal-card {
+      width: min(720px, 100%);
+      background: #0e1527;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .modal-head, .modal-body, .modal-foot {
+      padding: 16px;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-body { display: grid; gap: 12px; }
+    .modal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .stat {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .stat .big {
+      font-size: 24px;
+      font-weight: 800;
+    }
+    .stat .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      padding: 3px 7px;
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.04);
+      color: #dfe5ff;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; overflow: auto; }
+      body { overflow: auto; }
+      .video-wrap video { max-height: 60vh; }
+      .sidebar { min-height: 58vh; }
+    }
+
+    @media (max-width: 640px) {
+      .topbar, .controls, .side-head, .playlist-actions, .side-foot { padding-left: 12px; padding-right: 12px; }
+      .modal-grid { grid-template-columns: 1fr; }
+      .seek-wrap { grid-template-columns: 50px 1fr 50px; }
+      .volume { width: 95px; }
+      .overlay-hint { flex-direction: column; align-items: stretch; }
+      .now-playing { max-width: 100%; }
+      .hint-box { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="player-shell">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+          </div>
+          <div class="title-wrap">
+            <div class="title">Local Video Playlist Player</div>
+            <div class="subtitle" id="statusText">Pick a folder or drop video files to begin.</div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" id="pickFolderBtn">Open folder</button>
+          <button class="btn" id="pickFilesBtn">Add files</button>
+          <button class="btn" id="saveListBtn">Save list</button>
+          <button class="btn" id="loadListBtn">Load list</button>
+          <input id="folderInput" class="hidden" type="file" webkitdirectory multiple accept="video/*" />
+          <input id="fileInput" class="hidden" type="file" multiple accept="video/*" />
+          <input id="playlistFileInput" class="hidden" type="file" accept="application/json" />
+        </div>
+      </div>
+
+      <div class="main-stage">
+        <div class="video-wrap" id="videoWrap">
+          <video id="video" playsinline preload="metadata"></video>
+          <div class="overlay-hint">
+            <div class="now-playing">
+              <div class="label">Now playing</div>
+              <div class="file" id="currentTitle">Nothing loaded</div>
+              <div class="meta" id="currentMeta">Add a folder of videos to build a playlist.</div>
+            </div>
+            <div class="hint-box">
+              Space play/pause · ←/→ seek · ↑/↓ volume · N/P next/prev · L loop mode · S shuffle · 1/2 speed
+            </div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="seek-wrap">
+            <div class="time" id="currentTime">0:00</div>
+            <input class="range" id="seekBar" type="range" min="0" max="1000" value="0" />
+            <div class="time" id="durationTime">0:00</div>
+          </div>
+
+          <div class="row space">
+            <div class="control-cluster">
+              <button class="icon-btn" id="prevBtn" title="Previous (P)">
+                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3 6l9 6V6z"></path></svg>
+                Prev
+              </button>
+              <button class="icon-btn" id="playBtn" title="Play / pause (Space)">
+                <svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"></path></svg>
+                Play
+              </button>
+              <button class="icon-btn" id="nextBtn" title="Next (N)">
+                Next
+                <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zm-9 0l9 6-9 6z"></path></svg>
+              </button>
+              <button class="icon-btn" id="loopBtn" title="Loop mode (L)">Loop: off</button>
+              <button class="icon-btn" id="shuffleBtn" title="Shuffle (S)">Shuffle: off</button>
+            </div>
+            <div class="control-cluster">
+              <span class="mini">Speed</span>
+              <select id="speedSelect" title="Playback speed">
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+              <span class="mini">Volume</span>
+              <input class="range volume" id="volumeBar" type="range" min="0" max="100" value="100" />
+              <button class="icon-btn" id="muteBtn" title="Mute">Mute</button>
+              <button class="icon-btn" id="fullscreenBtn" title="Fullscreen">Fullscreen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="side-head">
+        <div class="side-head-top">
+          <div>
+            <div class="section-title">Playlist</div>
+            <div class="count" id="playlistCount">0 videos</div>
+          </div>
+          <button class="btn" id="clearBtn">Clear</button>
+        </div>
+        <div class="search-row">
+          <input id="searchInput" type="text" placeholder="Filter playlist…" />
+          <button class="btn" id="sortBtn" title="Toggle sort">Sort A–Z</button>
+        </div>
+      </div>
+
+      <div class="playlist-actions">
+        <button class="chip" id="addCurrentBtn">Append current folder</button>
+        <button class="chip" id="removeMissingBtn">Drop missing</button>
+        <button class="chip" id="statsBtn">Stats</button>
+      </div>
+
+      <div class="playlist" id="playlist"></div>
+
+      <div class="side-foot">
+        <div class="dropzone" id="dropzone">
+          Drop video files or a folder here. Browser prompts may vary by browser.
+        </div>
+        <div class="small-note">
+          Tips: drag playlist items to reorder, double-click a video to play, and press <span class="kbd">?</span> for shortcuts.
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="modal" id="statsModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="section-title">Playlist stats</div>
+          <div class="count" id="statsSubtitle">—</div>
+        </div>
+        <button class="btn" id="closeStatsBtn">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-grid">
+          <div class="stat"><div class="big" id="statVideos">0</div><div class="label">videos loaded</div></div>
+          <div class="stat"><div class="big" id="statHours">0:00</div><div class="label">total duration</div></div>
+          <div class="stat"><div class="big" id="statFolder">0</div><div class="label">folders tracked</div></div>
+        </div>
+        <div class="small-note">
+          Local file playback depends on browser permissions. Directory picking works best in Chromium-based browsers; Firefox support for folder access is more limited.
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn primary" id="closeStatsBtn2">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const playlistEl = document.getElementById('playlist');
+    const statusText = document.getElementById('statusText');
+    const currentTitle = document.getElementById('currentTitle');
+    const currentMeta = document.getElementById('currentMeta');
+    const playlistCount = document.getElementById('playlistCount');
+    const searchInput = document.getElementById('searchInput');
+    const seekBar = document.getElementById('seekBar');
+    const currentTimeEl = document.getElementById('currentTime');
+    const durationTimeEl = document.getElementById('durationTime');
+    const volumeBar = document.getElementById('volumeBar');
+    const speedSelect = document.getElementById('speedSelect');
+    const playBtn = document.getElementById('playBtn');
+    const playIcon = document.getElementById('playIcon');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const loopBtn = document.getElementById('loopBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const sortBtn = document.getElementById('sortBtn');
+    const statsBtn = document.getElementById('statsBtn');
+    const dropzone = document.getElementById('dropzone');
+    const pickFolderBtn = document.getElementById('pickFolderBtn');
+    const pickFilesBtn = document.getElementById('pickFilesBtn');
+    const saveListBtn = document.getElementById('saveListBtn');
+    const loadListBtn = document.getElementById('loadListBtn');
+    const addCurrentBtn = document.getElementById('addCurrentBtn');
+    const removeMissingBtn = document.getElementById('removeMissingBtn');
+    const folderInput = document.getElementById('folderInput');
+    const fileInput = document.getElementById('fileInput');
+    const playlistFileInput = document.getElementById('playlistFileInput');
+    const statsModal = document.getElementById('statsModal');
+    const statVideos = document.getElementById('statVideos');
+    const statHours = document.getElementById('statHours');
+    const statFolder = document.getElementById('statFolder');
+    const statsSubtitle = document.getElementById('statsSubtitle');
+    const closeStatsBtn = document.getElementById('closeStatsBtn');
+    const closeStatsBtn2 = document.getElementById('closeStatsBtn2');
+
+    const state = {
+      playlist: [],
+      currentIndex: -1,
+      shuffle: false,
+      loopMode: 'off', // off | all | one
+      sortMode: 'manual', // manual | az
+      filter: '',
+      folders: new Set(),
+      lastLoadedFolderFiles: [],
+      draggingIndex: null,
+      autoPlayNext: true,
+      seekScrubging: false,
+      savedVolume: 1,
+      objectUrls: new Map(),
+    };
+
+    const extVideo = /\.(mp4|webm|mkv|mov|m4v|avi|ogv)$/i;
+
+    function formatTime(sec) {
+      if (!Number.isFinite(sec) || sec < 0) return '0:00';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function updateStatus(msg) { statusText.textContent = msg; }
+
+    function visiblePlaylist() {
+      const q = state.filter.trim().toLowerCase();
+      let items = [...state.playlist];
+      if (state.sortMode === 'az') {
+        items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      }
+      if (q) {
+        items = items.filter(item => `${item.name} ${item.path}`.toLowerCase().includes(q));
+      }
+      return items;
+    }
+
+    function activeItem() {
+      return state.playlist[state.currentIndex] || null;
+    }
+
+    function setLoopMode(mode) {
+      state.loopMode = mode;
+      loopBtn.textContent = `Loop: ${mode}`;
+      loopBtn.classList.toggle('on', mode !== 'off');
+      updateStatus(`Loop set to ${mode}.`);
+    }
+
+    function setShuffle(on) {
+      state.shuffle = on;
+      shuffleBtn.textContent = `Shuffle: ${on ? 'on' : 'off'}`;
+      shuffleBtn.classList.toggle('on', on);
+      updateStatus(on ? 'Shuffle enabled.' : 'Shuffle disabled.');
+    }
+
+    function syncMediaMeta() {
+      const item = activeItem();
+      if (!item) {
+        currentTitle.textContent = 'Nothing loaded';
+        currentMeta.textContent = 'Add a folder of videos to build a playlist.';
+        playlistCount.textContent = '0 videos';
+        return;
+      }
+      currentTitle.textContent = item.name;
+      currentMeta.textContent = `${item.path} · ${item.duration ? formatTime(item.duration) : 'duration loading…'}`;
+      playlistCount.textContent = `${state.playlist.length} video${state.playlist.length === 1 ? '' : 's'}`;
+    }
+
+    function revokeAllUrls() {
+      for (const url of state.objectUrls.values()) URL.revokeObjectURL(url);
+      state.objectUrls.clear();
+    }
+
+    function getUrlForItem(item) {
+      if (!item) return '';
+      if (item.url) return item.url;
+      const url = URL.createObjectURL(item.file);
+      item.url = url;
+      state.objectUrls.set(item.id, url);
+      return url;
+    }
+
+    function renderPlaylist() {
+      syncMediaMeta();
+      const items = visiblePlaylist();
+      playlistEl.innerHTML = '';
+
+      if (!items.length) {
+        playlistEl.innerHTML = `
+          <div style="padding: 18px; color: var(--muted); text-align: center;">
+            No matching videos yet.
+          </div>
+        `;
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      items.forEach((item, visibleIndex) => {
+        const actualIndex = state.playlist.findIndex(x => x.id === item.id);
+        const row = document.createElement('div');
+        row.className = 'track' + (actualIndex === state.currentIndex ? ' active' : '');
+        row.draggable = true;
+        row.dataset.id = item.id;
+        row.dataset.index = actualIndex;
+        row.innerHTML = `
+          <div class="index-badge">${visibleIndex + 1}</div>
+          <div class="track-info">
+            <div class="track-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+            <div class="track-meta" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}${item.duration ? ' · ' + formatTime(item.duration) : ''}</div>
+          </div>
+          <div class="track-tools">
+            <button class="btn" data-action="play">Play</button>
+            <button class="btn danger" data-action="remove">Remove</button>
+          </div>
+        `;
+
+        row.addEventListener('click', (e) => {
+          const action = e.target?.dataset?.action;
+          if (action === 'remove') return;
+          if (action === 'play') {
+            playAtIndex(actualIndex);
+          } else {
+            playAtIndex(actualIndex);
+          }
+        });
+
+        row.addEventListener('dblclick', () => playAtIndex(actualIndex));
+
+        row.addEventListener('dragstart', (e) => {
+          state.draggingIndex = actualIndex;
+          row.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(actualIndex));
+        });
+
+        row.addEventListener('dragend', () => {
+          state.draggingIndex = null;
+          row.classList.remove('dragging');
+          [...playlistEl.querySelectorAll('.track')].forEach(el => el.classList.remove('drag-over'));
+        });
+
+        row.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          row.style.borderColor = 'rgba(124,140,255,0.55)';
+        });
+
+        row.addEventListener('dragleave', () => {
+          row.style.borderColor = 'transparent';
+        });
+
+        row.addEventListener('drop', (e) => {
+          e.preventDefault();
+          row.style.borderColor = 'transparent';
+          const from = Number(e.dataTransfer.getData('text/plain'));
+          const to = actualIndex;
+          if (!Number.isNaN(from) && !Number.isNaN(to) && from !== to) movePlaylistItem(from, to);
+        });
+
+        const removeBtn = row.querySelector('[data-action="remove"]');
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeAtIndex(actualIndex);
+        });
+
+        frag.appendChild(row);
+      });
+      playlistEl.appendChild(frag);
+    }
+
+    function addFiles(files, folderLabel = '') {
+      const list = Array.from(files || []).filter(file => extVideo.test(file.name));
+      if (!list.length) {
+        updateStatus('No supported video files were found.');
+        return;
+      }
+
+      const batch = list.map(file => ({
+        id: crypto.randomUUID(),
+        file,
+        name: file.name,
+        path: folderLabel ? `${folderLabel}/${file.name}` : file.name,
+        folder: folderLabel,
+        duration: null,
+        url: null,
+      }));
+
+      state.playlist.push(...batch);
+      if (state.sortMode === 'az') {
+        state.playlist.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      }
+      loadDurationHints(batch);
+      if (state.currentIndex === -1) state.currentIndex = 0;
+      state.folders.add(folderLabel || 'selected files');
+      renderPlaylist();
+      updateStatus(`Added ${batch.length} video${batch.length === 1 ? '' : 's'}.`);
+      if (!video.src) playAtIndex(state.currentIndex, false);
+    }
+
+    async function loadDurationHints(batch) {
+      // Best effort. Durations appear when items are loaded.
+      for (const item of batch) {
+        await new Promise(resolve => {
+          const temp = document.createElement('video');
+          temp.preload = 'metadata';
+          temp.onloadedmetadata = () => {
+            item.duration = temp.duration;
+            temp.src = '';
+            resolve();
+            renderPlaylist();
+          };
+          temp.onerror = () => resolve();
+          temp.src = URL.createObjectURL(item.file);
+        });
+      }
+    }
+
+    function removeAtIndex(index) {
+      if (index < 0 || index >= state.playlist.length) return;
+      const [removed] = state.playlist.splice(index, 1);
+      if (removed?.url) {
+        URL.revokeObjectURL(removed.url);
+        state.objectUrls.delete(removed.id);
+      }
+      if (!state.playlist.length) {
+        state.currentIndex = -1;
+        video.removeAttribute('src');
+        video.load();
+        updateStatus('Playlist cleared down to zero.');
+      } else if (index < state.currentIndex) {
+        state.currentIndex--;
+      } else if (index === state.currentIndex) {
+        state.currentIndex = Math.min(index, state.playlist.length - 1);
+        playAtIndex(state.currentIndex, false);
+      }
+      renderPlaylist();
+    }
+
+    function movePlaylistItem(from, to) {
+      if (from === to || from < 0 || to < 0 || from >= state.playlist.length || to >= state.playlist.length) return;
+      const [item] = state.playlist.splice(from, 1);
+      state.playlist.splice(to, 0, item);
+      if (state.currentIndex === from) state.currentIndex = to;
+      else if (from < state.currentIndex && to >= state.currentIndex) state.currentIndex--;
+      else if (from > state.currentIndex && to <= state.currentIndex) state.currentIndex++;
+      renderPlaylist();
+      updateStatus('Playlist reordered.');
+    }
+
+    function playAtIndex(index, autoplay = true) {
+      if (index < 0 || index >= state.playlist.length) return;
+      state.currentIndex = index;
+      const item = activeItem();
+      const url = getUrlForItem(item);
+      const currentTime = video.currentTime || 0;
+      video.src = url;
+      video.playbackRate = Number(speedSelect.value);
+      if (autoplay) {
+        video.play().catch(() => {});
+      }
+      syncMediaMeta();
+      renderPlaylist();
+      updateStatus(`Loaded ${item.name}.`);
+      video.onloadedmetadata = () => {
+        if (item.duration == null && Number.isFinite(video.duration)) {
+          item.duration = video.duration;
+          renderPlaylist();
+        }
+        if (currentTime && state.autoPlayNext === false) video.currentTime = Math.min(currentTime, Math.max(0, video.duration - 0.5));
+      };
+    }
+
+    function nextIndex() {
+      if (!state.playlist.length) return -1;
+      if (state.shuffle) {
+        if (state.playlist.length === 1) return state.currentIndex;
+        let n = state.currentIndex;
+        while (n === state.currentIndex) n = Math.floor(Math.random() * state.playlist.length);
+        return n;
+      }
+      return (state.currentIndex + 1) % state.playlist.length;
+    }
+
+    function prevIndex() {
+      if (!state.playlist.length) return -1;
+      if (state.shuffle) {
+        if (state.playlist.length === 1) return state.currentIndex;
+        let n = state.currentIndex;
+        while (n === state.currentIndex) n = Math.floor(Math.random() * state.playlist.length);
+        return n;
+      }
+      return (state.currentIndex - 1 + state.playlist.length) % state.playlist.length;
+    }
+
+    function updateSeekBar() {
+      if (!video.duration || !Number.isFinite(video.duration)) return;
+      if (!state.seekScrubging) seekBar.value = Math.round((video.currentTime / video.duration) * 1000);
+      currentTimeEl.textContent = formatTime(video.currentTime);
+      durationTimeEl.textContent = formatTime(video.duration);
+    }
+
+    function togglePlay() {
+      if (!video.src && state.playlist.length) playAtIndex(state.currentIndex === -1 ? 0 : state.currentIndex);
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+    }
+
+    async function openFolderPicker() {
+      if (window.showDirectoryPicker) {
+        try {
+          const dir = await window.showDirectoryPicker({ mode: 'read' });
+          const files = [];
+          async function walk(entry, prefix = '') {
+            for await (const [name, child] of entry.entries()) {
+              if (child.kind === 'file') {
+                const file = await child.getFile();
+                if (extVideo.test(file.name)) files.push({ file, prefix });
+              } else if (child.kind === 'directory') {
+                await walk(child, prefix ? `${prefix}/${name}` : name);
+              }
+            }
+          }
+          await walk(dir, dir.name || 'folder');
+          const added = files.map(({ file, prefix }) => ({ file, prefix }));
+          const list = added.map(({ file, prefix }) => ({ file, label: prefix }));
+          const batch = list.map(({ file, label }) => file);
+          const folderLabel = dir.name || 'folder';
+          addFiles(batch, folderLabel);
+          if (files.length) state.lastLoadedFolderFiles = files;
+        } catch (err) {
+          if (String(err?.name) !== 'AbortError') updateStatus('Folder access was not granted.');
+        }
+      } else {
+        folderInput.click();
+      }
+    }
+
+    function addCurrentFolder() {
+      if (!state.lastLoadedFolderFiles.length) {
+        updateStatus('No folder metadata available to append.');
+        return;
+      }
+      addFiles(state.lastLoadedFolderFiles.map(x => x.file), state.lastLoadedFolderFiles[0]?.prefix || 'folder');
+    }
+
+    function removeMissing() {
+      // Files selected via browser are already local, so “missing” mostly means not reachable due to revocation or manual state.
+      const before = state.playlist.length;
+      state.playlist = state.playlist.filter(item => item.file instanceof File);
+      const removed = before - state.playlist.length;
+      if (state.currentIndex >= state.playlist.length) state.currentIndex = state.playlist.length - 1;
+      renderPlaylist();
+      updateStatus(removed ? `Removed ${removed} missing item${removed === 1 ? '' : 's'}.` : 'Nothing to remove.');
+    }
+
+    function clearPlaylist() {
+      revokeAllUrls();
+      state.playlist = [];
+      state.currentIndex = -1;
+      video.removeAttribute('src');
+      video.load();
+      renderPlaylist();
+      syncMediaMeta();
+      updateStatus('Playlist cleared.');
+    }
+
+    function savePlaylist() {
+      const data = state.playlist.map(item => ({ name: item.name, path: item.path, duration: item.duration }));
+      const blob = new Blob([JSON.stringify({ savedAt: new Date().toISOString(), items: data }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'playlist-metadata.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      updateStatus('Playlist metadata exported.');
+    }
+
+    async function loadPlaylistFromJson(file) {
+      try {
+        const txt = await file.text();
+        const parsed = JSON.parse(txt);
+        const items = Array.isArray(parsed?.items) ? parsed.items : [];
+        if (!items.length) throw new Error('No items');
+        updateStatus(`Loaded ${items.length} metadata entries. Re-import the actual videos to play them.`);
+      } catch {
+        updateStatus('That JSON file could not be read as a saved playlist.');
+      }
+    }
+
+    function openStats() {
+      const total = state.playlist.length;
+      const totalDuration = state.playlist.reduce((sum, item) => sum + (Number.isFinite(item.duration) ? item.duration : 0), 0);
+      statVideos.textContent = total;
+      statHours.textContent = formatTime(totalDuration);
+      statFolder.textContent = state.folders.size;
+      statsSubtitle.textContent = total ? `${total} video${total === 1 ? '' : 's'} in ${state.folders.size} folder bucket${state.folders.size === 1 ? '' : 's'}` : 'No videos loaded yet';
+      statsModal.classList.add('open');
+    }
+
+    function closeStats() { statsModal.classList.remove('open'); }
+
+    // Controls
+    pickFolderBtn.addEventListener('click', openFolderPicker);
+    pickFilesBtn.addEventListener('click', () => fileInput.click());
+    saveListBtn.addEventListener('click', savePlaylist);
+    loadListBtn.addEventListener('click', () => playlistFileInput.click());
+    addCurrentBtn.addEventListener('click', addCurrentFolder);
+    removeMissingBtn.addEventListener('click', removeMissing);
+    clearBtn.addEventListener('click', clearPlaylist);
+    sortBtn.addEventListener('click', () => {
+      state.sortMode = state.sortMode === 'manual' ? 'az' : 'manual';
+      sortBtn.textContent = state.sortMode === 'manual' ? 'Sort A–Z' : 'Sort manual';
+      renderPlaylist();
+      updateStatus(`Sort mode: ${state.sortMode}.`);
+    });
+    statsBtn.addEventListener('click', openStats);
+    closeStatsBtn.addEventListener('click', closeStats);
+    closeStatsBtn2.addEventListener('click', closeStats);
+    statsModal.addEventListener('click', (e) => { if (e.target === statsModal) closeStats(); });
+
+    playBtn.addEventListener('click', togglePlay);
+    prevBtn.addEventListener('click', () => playAtIndex(prevIndex()));
+    nextBtn.addEventListener('click', () => playAtIndex(nextIndex()));
+    loopBtn.addEventListener('click', () => {
+      const next = state.loopMode === 'off' ? 'all' : state.loopMode === 'all' ? 'one' : 'off';
+      setLoopMode(next);
+    });
+    shuffleBtn.addEventListener('click', () => setShuffle(!state.shuffle));
+    muteBtn.addEventListener('click', () => {
+      video.muted = !video.muted;
+      muteBtn.textContent = video.muted ? 'Unmute' : 'Mute';
+      updateStatus(video.muted ? 'Muted.' : 'Unmuted.');
+    });
+    fullscreenBtn.addEventListener('click', async () => {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen().catch(() => {});
+      else await document.exitFullscreen().catch(() => {});
+    });
+
+    volumeBar.addEventListener('input', () => {
+      video.volume = Number(volumeBar.value) / 100;
+      state.savedVolume = video.volume;
+      if (video.volume > 0 && video.muted) {
+        video.muted = false;
+        muteBtn.textContent = 'Mute';
+      }
+    });
+    speedSelect.addEventListener('change', () => {
+      video.playbackRate = Number(speedSelect.value);
+      updateStatus(`Speed set to ${speedSelect.value}×.`);
+    });
+
+    seekBar.addEventListener('input', () => {
+      state.seekScrubging = true;
+      if (video.duration && Number.isFinite(video.duration)) {
+        const t = (Number(seekBar.value) / 1000) * video.duration;
+        currentTimeEl.textContent = formatTime(t);
+      }
+    });
+    seekBar.addEventListener('change', () => {
+      if (video.duration && Number.isFinite(video.duration)) {
+        video.currentTime = (Number(seekBar.value) / 1000) * video.duration;
+      }
+      state.seekScrubging = false;
+    });
+
+    searchInput.addEventListener('input', () => {
+      state.filter = searchInput.value;
+      renderPlaylist();
+    });
+
+    folderInput.addEventListener('change', () => {
+      addFiles(folderInput.files, folderInput.files?.[0]?.webkitRelativePath?.split('/')?.[0] || 'folder');
+      folderInput.value = '';
+    });
+    fileInput.addEventListener('change', () => {
+      addFiles(fileInput.files, 'manual add');
+      fileInput.value = '';
+    });
+    playlistFileInput.addEventListener('change', () => {
+      const f = playlistFileInput.files?.[0];
+      if (f) loadPlaylistFromJson(f);
+      playlistFileInput.value = '';
+    });
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      const files = Array.from(e.dataTransfer.files || []);
+      if (files.length) addFiles(files, 'dropped files');
+    });
+
+    video.addEventListener('timeupdate', updateSeekBar);
+    video.addEventListener('loadedmetadata', () => {
+      durationTimeEl.textContent = formatTime(video.duration);
+      updateSeekBar();
+    });
+    video.addEventListener('play', () => {
+      playIcon.innerHTML = '<path d="M6 5h4v14H6zm8 0h4v14h-4z"></path>';
+      playBtn.lastChild.textContent = 'Pause';
+    });
+    video.addEventListener('pause', () => {
+      playIcon.innerHTML = '<path d="M8 5v14l11-7z"></path>';
+      playBtn.lastChild.textContent = 'Play';
+    });
+    video.addEventListener('ended', () => {
+      if (state.loopMode === 'one') {
+        video.currentTime = 0;
+        video.play().catch(() => {});
+        return;
+      }
+      if (state.loopMode === 'all' || state.currentIndex < state.playlist.length - 1) {
+        const ni = nextIndex();
+        if (ni !== -1) playAtIndex(ni);
+      }
+    });
+    video.addEventListener('error', () => {
+      updateStatus('That video could not be played by the browser. Try another format like MP4 or WebM.');
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (statsModal.classList.contains('open') && e.key === 'Escape') closeStats();
+      if (e.target.matches('input, textarea, select')) return;
+
+      const key = e.key.toLowerCase();
+      if (e.key === ' ' ) { e.preventDefault(); togglePlay(); }
+      else if (key === 'arrowright') { e.preventDefault(); video.currentTime = Math.min((video.currentTime || 0) + 10, video.duration || Infinity); }
+      else if (key === 'arrowleft') { e.preventDefault(); video.currentTime = Math.max((video.currentTime || 0) - 10, 0); }
+      else if (key === 'arrowup') { e.preventDefault(); video.volume = Math.min(1, (video.volume || 0) + 0.05); volumeBar.value = Math.round(video.volume * 100); }
+      else if (key === 'arrowdown') { e.preventDefault(); video.volume = Math.max(0, (video.volume || 0) - 0.05); volumeBar.value = Math.round(video.volume * 100); }
+      else if (key === 'n') { e.preventDefault(); playAtIndex(nextIndex()); }
+      else if (key === 'p') { e.preventDefault(); playAtIndex(prevIndex()); }
+      else if (key === 'l') { e.preventDefault(); loopBtn.click(); }
+      else if (key === 's') { e.preventDefault(); shuffleBtn.click(); }
+      else if (key === '1') { e.preventDefault(); speedSelect.value = '1'; speedSelect.dispatchEvent(new Event('change')); }
+      else if (key === '2') { e.preventDefault(); speedSelect.value = '1.5'; speedSelect.dispatchEvent(new Event('change')); }
+      else if (key === '?') { e.preventDefault(); openStats(); }
+      else if (key === 'f') { e.preventDefault(); fullscreenBtn.click(); }
+      else if (key === 'm') { e.preventDefault(); muteBtn.click(); }
+      else if (key === 'o') { e.preventDefault(); openFolderPicker(); }
+    });
+
+    // Initial defaults
+    video.volume = 1;
+    setLoopMode('off');
+    setShuffle(false);
+    renderPlaylist();
+    syncMediaMeta();
+    updateSeekBar();
+    updateStatus('Ready. Open a folder to start watching.');
+  </script>
+</body>
+</html>
