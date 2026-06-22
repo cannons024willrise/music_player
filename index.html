@@ -32,6 +32,7 @@
             overflow: hidden;
             display: flex;
             user-select: none;
+            padding-top: 24px; /* Added padding between player and top of window */
         }
 
         /* Scrollbar Styling */
@@ -74,6 +75,7 @@
             min-width: 0; /* Prevents flexbox overflow */
             overflow-y: auto;
             background: #000;
+            border-top-left-radius: 8px;
         }
 
         /* 1. Video Wrapper (75vh height, absolutely clean) */
@@ -245,6 +247,7 @@
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
+            border-top-right-radius: 8px;
         }
 
         /* Playlist Header & Controls */
@@ -363,10 +366,6 @@
             font-size: 14px;
             line-height: 1.5;
         }
-
-        /* SVG definitions */
-        .svg-icon { display: none; } /* Hidden container for reusable symbols if we used them, but we inline them for simplicity */
-
     </style>
 </head>
 <body>
@@ -429,7 +428,7 @@
                             <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
                         </button>
                         
-                        <button id="btn-loop" title="Loop Mode (L)">
+                        <button id="btn-loop" title="Loop: OFF (L)">
                             <svg id="icon-loop-all" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
                             <svg id="icon-loop-one" viewBox="0 0 24 24" style="display:none;"><path d="M13 21v-3c4.42 0 8-3.58 8-8s-3.58-8-8-8V-1l-4 4 4 4V4c3.31 0 6 2.69 6 6s-2.69 6-6 6v-3l-4 4 4 4zm-2-6V9H9v1h1v5h1z"/></svg>
                         </button>
@@ -471,12 +470,13 @@
     <script>
         // --- State Management ---
         const state = {
-            files: new Map(), // id -> { id, file, url, name, format }
+            files: new Map(), // id -> { id, file, name, format }
             originalQueue: [], // Array of IDs in upload order
             shuffledQueue: [], // Array of IDs in shuffled order
             activeId: null, // Currently playing ID
+            currentUrl: null, // Active ObjectURL (memory optimization)
             isShuffle: false,
-            loopMode: 0, // 0 = OFF, 1 = ALL, 2 = ONE
+            loopMode: 0, // 0 = OFF, 1 = ALL (Playlist), 2 = ONE (Video)
             searchQuery: ''
         };
 
@@ -524,15 +524,15 @@
         }
 
         // Generate a new shuffled queue using Fisher-Yates
-        function generateShuffleQueue() {
+        function generateShuffleQueue(keepCurrentFirst = true) {
             let queue = [...state.originalQueue];
             for (let i = queue.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [queue[i], queue[j]] = [queue[j], queue[i]];
             }
             
-            // If playing, ensure current video is at index 0
-            if (state.activeId !== null) {
+            // If playing, ensure current video is at index 0 to avoid jumping
+            if (keepCurrentFirst && state.activeId !== null) {
                 const currentIndex = queue.indexOf(state.activeId);
                 if (currentIndex > 0) {
                     [queue[0], queue[currentIndex]] = [queue[currentIndex], queue[0]];
@@ -541,7 +541,7 @@
             state.shuffledQueue = queue;
         }
 
-        // Add files to the state
+        // Add files to the state (Light Load: Does NOT generate Object URLs immediately)
         function handleFiles(fileList) {
             const newFiles = Array.from(fileList).filter(f => f.type.startsWith('video/'));
             if (newFiles.length === 0) return;
@@ -556,7 +556,6 @@
                 const fileObj = {
                     id: id,
                     file: file,
-                    url: URL.createObjectURL(file),
                     name: file.name,
                     format: format
                 };
@@ -568,9 +567,6 @@
                 }
             });
 
-            // If we are shuffling, we probably want to reshuffle the remaining elements
-            // But appending is fine to keep the queue intact.
-            
             updatePlaylistUI();
 
             // Auto-play if nothing is playing
@@ -586,9 +582,6 @@
             const fileObj = state.files.get(id);
             if (!fileObj) return;
 
-            // Revoke memory
-            URL.revokeObjectURL(fileObj.url);
-            
             // Clean arrays
             state.files.delete(id);
             state.originalQueue = state.originalQueue.filter(v => v !== id);
@@ -597,7 +590,7 @@
             if (state.activeId === id) {
                 const activeQueue = getActiveQueue();
                 if (activeQueue.length > 0) {
-                    playVideo(activeQueue[0]); // Just play the first item of current queue
+                    playVideo(activeQueue[0]); // Play next available
                 } else {
                     stopPlayback();
                 }
@@ -606,13 +599,20 @@
             updatePlaylistUI();
         }
 
-        // Play specific video by ID
+        // Play specific video by ID (Light Load: Only generates URL for active video)
         function playVideo(id) {
             const fileObj = state.files.get(id);
             if (!fileObj) return;
 
+            // Revoke old URL to free memory
+            if (state.currentUrl) {
+                URL.revokeObjectURL(state.currentUrl);
+            }
+
             state.activeId = id;
-            player.src = fileObj.url;
+            state.currentUrl = URL.createObjectURL(fileObj.file);
+            
+            player.src = state.currentUrl;
             player.playbackRate = parseFloat(speedSelect.value);
             player.play().catch(e => console.warn("Playback prevented:", e));
             
@@ -626,6 +626,10 @@
 
         function stopPlayback() {
             state.activeId = null;
+            if (state.currentUrl) {
+                URL.revokeObjectURL(state.currentUrl);
+                state.currentUrl = null;
+            }
             player.src = '';
             videoTitle.textContent = 'No video selected';
             videoMeta.textContent = state.files.size > 0 ? 'Select a video from the playlist' : 'Playlist is empty. Add videos to start watching.';
@@ -640,10 +644,10 @@
         // Navigation Next
         function playNext(manual = false) {
             if (state.files.size === 0) return;
-            const queue = getActiveQueue();
+            let queue = getActiveQueue();
             if (queue.length === 0) return;
 
-            // If manual == false, it means natural end. Check loop one
+            // If natural end (not manual) check loop one (video loop)
             if (!manual && state.loopMode === 2) {
                 player.currentTime = 0;
                 player.play();
@@ -654,17 +658,26 @@
             currentIndex++;
 
             if (currentIndex >= queue.length) {
-                if (state.loopMode === 1) { // Loop ALL
+                if (state.loopMode === 1) { // Loop Playlist
+                    if (state.isShuffle) {
+                        // Randomize loop start/end by re-shuffling the queue entirely for the next cycle
+                        generateShuffleQueue(false);
+                        queue = state.shuffledQueue;
+                    }
                     currentIndex = 0;
                 } else if (state.loopMode === 0) { // Loop OFF
                     if (manual) {
-                        currentIndex = 0; // Manual next goes to top
+                        if (state.isShuffle) {
+                            generateShuffleQueue(false);
+                            queue = state.shuffledQueue;
+                        }
+                        currentIndex = 0; // Manual next wraps to top
                     } else {
-                        // Natural end on Loop OFF stops at end
+                        // Natural end stops
                         return;
                     }
                 } else if (state.loopMode === 2 && manual) {
-                    currentIndex = 0; // manual next jumps out of loop one
+                    currentIndex = 0; // manual next escapes loop one and wraps to top if at end
                 }
             }
 
@@ -696,7 +709,7 @@
         // --- UI Updates ---
 
         function updatePlaylistUI() {
-            const queue = state.originalQueue; // Playlist always shows original order, just highlights active
+            const queue = state.originalQueue; // Playlist UI always shows original order, highlights active
             playlistCount.textContent = `${state.files.size} items`;
 
             if (queue.length === 0) {
@@ -735,7 +748,6 @@
 
                 // Scroll into view if active
                 if (isActive) {
-                    // Small delay to ensure DOM is updated
                     setTimeout(() => {
                         li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     }, 50);
@@ -782,10 +794,9 @@
             state.isShuffle = !state.isShuffle;
             if (state.isShuffle) {
                 btnShuffle.classList.add('toggle-active');
-                generateShuffleQueue();
+                generateShuffleQueue(true); // Generates and keeps current playing video at index 0
             } else {
                 btnShuffle.classList.remove('toggle-active');
-                // state.originalQueue is already intact
             }
         }
 
@@ -796,11 +807,14 @@
             iconLoopOne.style.display = 'none';
 
             if (state.loopMode === 0) { // OFF
+                btnLoop.title = "Loop: OFF (L)";
                 iconLoopAll.style.display = 'block';
-            } else if (state.loopMode === 1) { // ALL
+            } else if (state.loopMode === 1) { // ALL (Playlist)
+                btnLoop.title = "Loop: Playlist (L)";
                 btnLoop.classList.add('toggle-active');
                 iconLoopAll.style.display = 'block';
-            } else if (state.loopMode === 2) { // ONE
+            } else if (state.loopMode === 2) { // ONE (Video)
+                btnLoop.title = "Loop: Video (L)";
                 btnLoop.classList.add('toggle-active');
                 iconLoopOne.style.display = 'block';
             }
